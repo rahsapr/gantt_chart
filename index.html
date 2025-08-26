@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Gantt Chart Visualizer</title>
+    <link rel="stylesheet" href="style.css">
+    <style id="dynamic-color-styles"></style> <!-- For dynamic section colors -->
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>Advanced Gantt Chart Visualizer</h1>
+            <p>Upload your project CSV to generate an interactive, filterable timeline.</p>
+        </header>
+
+        <div class="controls">
+            <div class="file-uploader">
+                <label for="csv-file-input">Choose a CSV File</label>
+                <input type="file" id="csv-file-input" accept=".csv">
+            </div>
+            <div class="view-controls">
+                <label for="view-mode-select">View Mode:</label>
+                <select id="view-mode-select">
+                    <option value="Week">Week</option>
+                    <option value="Day">Day</option>
+                    <option value="Month">Month</option>
+                </select>
+                <button id="download-png-btn">Download as PNG</button>
+            </div>
+        </div>
+
+        <div id="filter-panel" class="controls" style="display: none;">
+            <div class="filter-group">
+                <label for="project-filter">Filter by Project:</label>
+                <select id="project-filter">
+                    <option value="all">All Projects</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="date-start-filter">Date Range:</label>
+                <input type="date" id="date-start-filter">
+                <span>to</span>
+                <input type="date" id="date-end-filter">
+                 <button id="reset-filters-btn">Reset</button>
+            </div>
+            <div class="filter-group">
+                 <label for="search-input">Search Tasks:</label>
+                 <input type="search" id="search-input" placeholder="Highlight tasks...">
+            </div>
+        </div>
+
+        <div id="chart-area">
+            <div id="gantt-chart-container">
+                <!-- Gantt Chart will be rendered here -->
+            </div>
+            <div id="instructions">
+                <!-- Instructions remain the same as the previous version -->
+                <h2>Welcome!</h2>
+                <p>Drop your CSV file anywhere on this page or use the button above to begin.</p>
+                <h3>Required CSV Format:</h3>
+                <p>Your CSV file must have the following headers. The app will automatically build the hierarchy from them.</p>
+                <pre><code>Task ID,Name,Section/Column,Assignee,Start Date,Due Date,Completed At,Projects,Parent task,Notes,Tags</code></pre>
+                <p>(Other columns like 'Created At', 'Assignee Email' etc. are ignored but will not cause errors.)</p>
+                <ul>
+                    <li><strong>Hierarchy:</strong> Is built from <strong>Projects</strong> > <strong>Section/Column</strong> > <strong>Parent task</strong>.</li>
+                    <li><strong>Colors:</strong> Bars are colored by <strong>Section/Column</strong>.</li>
+                    <li><strong>Status:</strong> Is automatically calculated based on dates.</li>
+                </ul>
+                <a href="#" id="download-sample-csv">Download Sample CSV</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- External Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <!-- Our application logic -->
+    <script src="script.js"></script>
+
+</body>
+</html>
