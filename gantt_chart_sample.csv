@@ -1,0 +1,9 @@
+Task ID,Created At,Completed At,Last Modified,Name,Section/Column,Assignee,Assignee Email,Start Date,Due Date,Tags,Notes,Projects,Parent task,Blocked By (Dependencies),Blocking (Dependencies)
+101,2025-08-20,,2025-08-20,ACME - Project Launch,Launch Readiness,,,,,,High Priority,"A top-level project.",,,
+102,2025-08-21,,2025-08-22,Marketing Strategy,Marketing,Jane Doe,jane@acme.com,2025-09-01,2025-10-15,,,ACME - Project Launch,,
+103,2025-08-22,,2025-08-23,Develop Ad Campaign,Marketing,John Smith,john@acme.com,2025-09-05,2025-09-20,,,ACME - Project Launch,Marketing Strategy,
+104,2025-08-23,2025-09-30,2025-09-30,Finalize Budget,Finance,Alice,alice@acme.com,2025-09-01,2025-09-15,finance,,"ACME - Project Launch",,
+105,2025-08-24,,2025-08-25,Technical Setup,Engineering,,eng@acme.com,2025-09-10,2025-11-01,,,ACME - Project Launch,,
+106,2025-08-25,,2025-08-26,Deploy Servers,Engineering,Bob,bob@acme.com,2025-09-15,2025-09-25,,,ACME - Project Launch,Technical Setup,
+201,2025-08-26,,2025-08-27,Website Redesign,Web Team,,,,,,,"Another top-level project.",,,
+202,2025-08-27,,2025-08-28,Homepage Mockup,Web Team,Charlie,charlie@acme.com,2025-10-01,2025-10-20,,,Website Redesign,

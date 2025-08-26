@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Advanced Gantt Chart Visualizer</title>
     <link rel="stylesheet" href="style.css">
-    <style id="dynamic-color-styles"></style> <!-- For dynamic section colors -->
+    <!-- This style tag will be populated by JavaScript for dynamic colors -->
+    <style id="dynamic-color-styles"></style>
 </head>
 <body>
 
@@ -53,25 +54,26 @@
 
         <div id="chart-area">
             <div id="gantt-chart-container">
-                <!-- Gantt Chart will be rendered here -->
+                <!-- Gantt Chart will be rendered here by JavaScript -->
             </div>
             <div id="instructions">
-                <!-- Instructions remain the same as the previous version -->
                 <h2>Welcome!</h2>
                 <p>Drop your CSV file anywhere on this page or use the button above to begin.</p>
                 <h3>Required CSV Format:</h3>
-                <p>Your CSV file must have the following headers. The app will automatically build the hierarchy from them.</p>
+                <p>Your CSV file must have the following headers. The app will automatically build the hierarchy.</p>
                 <pre><code>Task ID,Name,Section/Column,Assignee,Start Date,Due Date,Completed At,Projects,Parent task,Notes,Tags</code></pre>
-                <p>(Other columns like 'Created At', 'Assignee Email' etc. are ignored but will not cause errors.)</p>
-                <ul>
-                    <li><strong>Hierarchy:</strong> Is built from <strong>Projects</strong> > <strong>Section/Column</strong> > <strong>Parent task</strong>.</li>
+                 <ul>
+                    <li><strong>Hierarchy:</strong> Built from <strong>Projects</strong> > <strong>Section/Column</strong> > <strong>Parent task</strong>.</li>
                     <li><strong>Colors:</strong> Bars are colored by <strong>Section/Column</strong>.</li>
-                    <li><strong>Status:</strong> Is automatically calculated based on dates.</li>
+                    <li><strong>Status:</strong> Automatically calculated based on dates.</li>
                 </ul>
                 <a href="#" id="download-sample-csv">Download Sample CSV</a>
             </div>
         </div>
     </div>
+
+    <!-- This is the global popup element, controlled by JavaScript -->
+    <div id="global-task-popup" class="custom-popup"></div>
 
     <!-- External Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>

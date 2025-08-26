@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const resetFiltersBtn = document.getElementById('reset-filters-btn');
     const searchInput = document.getElementById('search-input');
     const dynamicColorStyles = document.getElementById('dynamic-color-styles');
+    const popupEl = document.getElementById('global-task-popup');
 
     let gantt;
     let masterTaskList = [];
@@ -57,9 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    function getStatus(task) { /* Unchanged from previous version */ }
-
-    function processData(rawData) { /* This function is now the processDataForGantt from previous version, slightly modified */ 
+    function processData(rawData) {
         const nodes = new Map();
         const createDummyNode = (id, name, type, originalData = {}) => {
             if (!nodes.has(id)) {
@@ -73,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         rawData.forEach(row => {
             if (!row['Task ID'] || !row['Name']) return;
-            const status = getStatus(row); // Assuming getStatus is defined elsewhere
+            const status = getStatus(row);
             nodes.set(row['Task ID'], {
                 id: row['Task ID'], name: row['Name'], start: row['Start Date'] || undefined, end: row['Due Date'] || undefined,
                 progress: status.progress, custom_class: `is-${status.name.toLowerCase().replace(/\s+/g, '')}`,
@@ -120,62 +119,55 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function applyFiltersAndRender() {
-        let filteredTasks = masterTaskList;
-
-        // 1. Filter by Project
+        let tasksToRender = masterTaskList;
         const selectedProject = projectFilter.value;
         if (selectedProject !== 'all') {
             const projectRoot = masterTaskList.find(t => t.id === selectedProject);
             const descendants = new Set();
             function getDescendants(node) {
+                if (!node) return;
                 descendants.add(node);
-                if (node.children) node.children.forEach(getDescendants);
+                node.children.forEach(childNode => getDescendants(masterTaskList.find(t => t.id === childNode.id)));
             }
             if (projectRoot) getDescendants(projectRoot);
-            filteredTasks = Array.from(descendants);
+            tasksToRender = Array.from(descendants);
         }
-
-        // 2. Filter by Date Range
         const startDate = dateStartFilter.value ? new Date(dateStartFilter.value) : null;
         const endDate = dateEndFilter.value ? new Date(dateEndFilter.value) : null;
-        if (startDate && endDate) {
-            endDate.setHours(23, 59, 59, 999); // Include the whole end day
+        if (startDate || endDate) {
             const visibleTaskIds = new Set();
-            filteredTasks.forEach(task => {
+            tasksToRender.forEach(task => {
                 const taskStart = task.start ? new Date(task.start) : null;
                 const taskEnd = task.end ? new Date(task.end) : null;
-                // Include task if it overlaps with the date range
-                if (taskStart && taskEnd && taskStart <= endDate && taskEnd >= startDate) {
-                    visibleTaskIds.add(task.id);
-                } else if (!taskStart && !taskEnd) { // Include parent tasks without dates
+                const effectiveStart = startDate || new Date('1970-01-01');
+                const effectiveEnd = endDate || new Date('2999-12-31');
+                effectiveEnd.setHours(23, 59, 59, 999);
+                if ((taskStart && taskEnd && taskStart <= effectiveEnd && taskEnd >= effectiveStart) || (!task.start && !task.end)) {
                     visibleTaskIds.add(task.id);
                 }
             });
-            // Keep a task if it's visible OR if any of its children are visible
-             const finalFilteredTasks = [];
-             const taskMap = new Map(filteredTasks.map(t => [t.id, t]));
-             function checkVisibility(task) {
+            tasksToRender = tasksToRender.filter(task => {
                 if (visibleTaskIds.has(task.id)) return true;
-                return task.children.some(child => checkVisibility(taskMap.get(child.id)));
-             }
-             filteredTasks.forEach(task => {
-                if (checkVisibility(task)) finalFilteredTasks.push(task);
-             });
-             filteredTasks = finalFilteredTasks;
+                function checkChildren(node) {
+                    if (!node) return false;
+                    return node.children.some(child => {
+                        if (visibleTaskIds.has(child.id)) return true;
+                        return checkChildren(masterTaskList.find(t => t.id === child.id));
+                    });
+                }
+                return checkChildren(task);
+            });
         }
-        
-        // Final flattening and rendering
-        const rootNodes = filteredTasks.filter(node => !filteredTasks.some(p => p.children.includes(node)));
+        const rootNodes = tasksToRender.filter(node => !tasksToRender.some(p => p.children.includes(node)));
         const flatTasks = [];
         function flatten(node) {
             flatTasks.push(node);
-            node.children.sort((a,b) => (a.start || 0) - (b.start || 0)).forEach(child => {
-                const childNode = filteredTasks.find(t => t.id === child.id);
+            node.children.sort((a, b) => (a.start || 'z').localeCompare(b.start || 'z')).forEach(child => {
+                const childNode = tasksToRender.find(t => t.id === child.id);
                 if (childNode) flatten(childNode);
             });
         }
         rootNodes.sort((a,b) => a.name.localeCompare(b.name)).forEach(flatten);
-        
         renderGantt(flatTasks);
     }
     
@@ -183,14 +175,60 @@ document.addEventListener('DOMContentLoaded', () => {
         chartContainer.innerHTML = '';
         if (tasks.length === 0) {
             chartContainer.innerHTML = '<p style="text-align:center; padding: 40px;">No tasks match the current filters.</p>';
+            let marker = document.querySelector('.today-marker');
+            if (marker) marker.style.display = 'none';
             return;
         }
-        gantt = new Gantt(chartContainer, tasks, { /* Options remain the same */ });
+        gantt = new Gantt(chartContainer, tasks, {});
+        postRenderSetup(tasks);
+    }
+
+    function postRenderSetup(tasks) {
         addHierarchyAndInteractivity(tasks);
         addTodayMarker();
+        setupCustomPopupEvents(tasks);
     }
-    
-    function addHierarchyAndInteractivity(tasks) { /* Mostly unchanged */ }
+
+    function setupCustomPopupEvents(tasks) {
+        const taskMap = new Map(tasks.map(t => [t.id, t]));
+        
+        document.querySelectorAll('.gantt .bar-wrapper').forEach(bar => {
+            bar.addEventListener('mouseenter', (e) => {
+                const taskId = bar.dataset.id;
+                const task = taskMap.get(taskId);
+                if (!task) return;
+
+                const o = task._original;
+                const statusClass = `is-${o.Status.toLowerCase().replace(/\s+/g, '')}`;
+                let html = `<h4>${o.Name}</h4>`;
+                html += `<p><strong>Status:</strong> <span class="popup-status ${statusClass}">${o.Status}</span></p>`;
+                if (o.Assignee) html += `<p><strong>Assignee:</strong> ${o.Assignee}</p>`;
+                html += `<p><strong>Dates:</strong> ${o['Start Date'] || 'TBD'} to ${o['Due Date'] || 'TBD'}</p>`;
+                if (o.Projects) html += `<p><strong>Project:</strong> ${o.Projects}</p>`;
+                if (o['Section/Column']) html += `<p><strong>Section:</strong> ${o['Section/Column']}</p>`;
+                html += `<hr>`;
+                const ignoreKeys = ['Name', 'Status', 'Assignee', 'Start Date', 'Due Date', 'Projects', 'Section/Column', 'Task ID', 'Type', 'Section'];
+                for (const key in o) {
+                    if (!ignoreKeys.includes(key) && o[key]) {
+                        html += `<p><strong>${key}:</strong> ${o[key]}</p>`;
+                    }
+                }
+                popupEl.innerHTML = html;
+                popupEl.style.left = `${e.pageX + 15}px`;
+                popupEl.style.top = `${e.pageY + 15}px`;
+                popupEl.classList.add('visible');
+            });
+
+            bar.addEventListener('mouseleave', () => {
+                popupEl.classList.remove('visible');
+            });
+
+            bar.addEventListener('mousemove', (e) => {
+                 popupEl.style.left = `${e.pageX + 15}px`;
+                 popupEl.style.top = `${e.pageY + 15}px`;
+            });
+        });
+    }
     
     function addTodayMarker() {
         if (!gantt) return;
@@ -203,10 +241,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const today = new Date();
         const ganttStartDate = new Date(gantt.gantt_start);
         const diffDays = (today - ganttStartDate) / (1000 * 60 * 60 * 24);
-        
         const pos_x = diffDays * gantt.options.column_width / (gantt.options.step / 24);
         const gridElement = document.querySelector('.grid');
-        
         if (pos_x > 0 && gridElement && pos_x < gridElement.clientWidth) {
             marker.style.left = `${pos_x}px`;
             marker.style.top = `${document.querySelector('.grid-header').offsetHeight}px`;
@@ -220,18 +256,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const query = searchInput.value.toLowerCase();
         document.querySelectorAll('.gantt .grid-row').forEach(row => {
             const name = row.querySelector('.row-name').textContent.toLowerCase();
-            if (query && name.includes(query)) {
-                row.classList.add('highlight');
-            } else {
-                row.classList.remove('highlight');
-            }
+            row.classList.toggle('highlight', query && name.includes(query));
         });
     }
 
     function populateProjectFilter(tasks) {
         projectFilter.innerHTML = '<option value="all">All Projects</option>';
-        const projects = tasks.filter(t => t.type === 'Project');
-        projects.forEach(p => {
+        const projects = tasks.filter(t => t._original.Type === 'Project');
+        projects.sort((a,b) => a.name.localeCompare(b.name)).forEach(p => {
             const option = document.createElement('option');
             option.value = p.id;
             option.textContent = p.name;
@@ -244,17 +276,16 @@ document.addEventListener('DOMContentLoaded', () => {
         let styles = '';
         sections.forEach((section, i) => {
             const color = colorPalette[i % colorPalette.length];
-            // Uses data-id attribute for specificity
-            const tasksInSection = tasks.filter(t => t._original.Section === section);
-            tasksInSection.forEach(task => {
-                 styles += `
-                 .gantt .bar-wrapper[data-id="${task.id}"] .bar {
-                     fill: ${color};
-                 }
-                 `;
-            });
+            const sectionClass = `section-color-${i}`;
+            styles += `.${sectionClass} .bar { fill: ${color}; }`;
         });
         dynamicColorStyles.innerHTML = styles;
+        const sectionMap = new Map(sections.map((sec, i) => [sec, `section-color-${i}`]));
+        tasks.forEach(task => {
+            if (task._original.Section) {
+                task.custom_class = (task.custom_class || '') + ' ' + sectionMap.get(task._original.Section);
+            }
+        });
     }
 
     function resetFilters() {
@@ -266,8 +297,6 @@ document.addEventListener('DOMContentLoaded', () => {
         applyFiltersAndRender();
     }
     
-    // --- Utility Functions (getStatus, downloadChartAsPNG, downloadSampleCSV) ---
-    // These functions remain the same as the previous version. I'm adding them here for completeness.
     function getStatus(task) {
         const now = new Date();
         now.setHours(0,0,0,0);
@@ -278,6 +307,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (startDate && startDate <= now) return { name: 'In Progress', progress: 50 };
         return { name: 'Not Started', progress: 0 };
     }
+
     function addHierarchyAndInteractivity(tasks) {
         const rowElements = new Map(Array.from(document.querySelectorAll('.gantt .grid-row')).map(el => [el.dataset.id, el]));
         tasks.forEach(task => {
@@ -285,23 +315,27 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!rowEl) return;
             const nameEl = rowEl.querySelector('.row-name');
             const type = task._original.Type;
-            const hasChildren = task.children.length > 0;
+            const hasChildren = task.children && task.children.length > 0;
             rowEl.classList.add(`${type.toLowerCase()}-row`);
             nameEl.innerHTML = `${hasChildren ? '<span class="collapse-icon">▼</span>' : '<span class="collapse-icon" style="opacity:0;">•</span>'} ${task.name}`;
             if (hasChildren) {
                 nameEl.style.cursor = 'pointer';
-                nameEl.addEventListener('click', () => {
+                nameEl.addEventListener('click', (e) => {
+                    e.stopPropagation();
                     rowEl.classList.toggle('collapsed');
                     const isCollapsed = rowEl.classList.contains('collapsed');
+                    const taskMap = new Map(tasks.map(t => [t.id, t]));
                     function toggleChildrenVisibility(taskNode, show) {
-                        taskNode.children.forEach(child => {
-                            const childEl = rowElements.get(child.id);
+                        if (!taskNode || !taskNode.children) return;
+                        taskNode.children.forEach(childRef => {
+                            const childNode = taskMap.get(childRef.id);
+                            const childEl = rowElements.get(childRef.id);
                             if (childEl) {
                                 childEl.style.display = show ? 'flex' : 'none';
                                 if (show && !childEl.classList.contains('collapsed')) {
-                                    toggleChildrenVisibility(child, true);
+                                    toggleChildrenVisibility(childNode, true);
                                 } else if (!show) {
-                                     toggleChildrenVisibility(child, false);
+                                     toggleChildrenVisibility(childNode, false);
                                 }
                             }
                         });
@@ -311,6 +345,35 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-    function downloadChartAsPNG() { /* No change */ }
-    function downloadSampleCSV() { /* No change */ }
+
+    function downloadChartAsPNG() {
+        popupEl.classList.remove('visible');
+        if (!gantt) { alert('Please upload a CSV file first.'); return; }
+        const chartElement = document.querySelector('.gantt-container');
+        html2canvas(chartElement, { backgroundColor: '#f4f7f9', logging: false, useCORS: true }).then(canvas => {
+            const link = document.createElement('a');
+            link.download = 'gantt-chart.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        });
+    }
+
+    function downloadSampleCSV() {
+        const csvContent = `Task ID,Created At,Completed At,Last Modified,Name,Section/Column,Assignee,Assignee Email,Start Date,Due Date,Tags,Notes,Projects,Parent task,Blocked By (Dependencies),Blocking (Dependencies)
+101,2025-08-20,,2025-08-20,ACME - Project Launch,Launch Readiness,,,,,,High Priority,"A top-level project.",,,
+102,2025-08-21,,2025-08-22,Marketing Strategy,Marketing,Jane Doe,jane@acme.com,2025-09-01,2025-10-15,,,ACME - Project Launch,,
+103,2025-08-22,,2025-08-23,Develop Ad Campaign,Marketing,John Smith,john@acme.com,2025-09-05,2025-09-20,,,ACME - Project Launch,Marketing Strategy,
+104,2025-08-23,2025-09-30,2025-09-30,Finalize Budget,Finance,Alice,alice@acme.com,2025-09-01,2025-09-15,finance,,"ACME - Project Launch",,
+105,2025-08-24,,2025-08-25,Technical Setup,Engineering,,eng@acme.com,2025-09-10,2025-11-01,,,ACME - Project Launch,,
+106,2025-08-25,,2025-08-26,Deploy Servers,Engineering,Bob,bob@acme.com,2025-09-15,2025-09-25,,,ACME - Project Launch,Technical Setup,
+201,2025-08-26,,2025-08-27,Website Redesign,Web Team,,,,,,,"Another top-level project.",,,
+202,2025-08-27,,2025-08-28,Homepage Mockup,Web Team,Charlie,charlie@acme.com,2025-10-01,2025-10-20,,,Website Redesign,`;
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.setAttribute("download", "gantt_chart_sample.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
 });
